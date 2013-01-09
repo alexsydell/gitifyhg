@@ -29,7 +29,7 @@ from path import path as p
 from mercurial.ui import ui
 from mercurial.context import memctx, memfilectx
 from mercurial import encoding
-from mercurial.bookmarks import listbookmarks, readcurrent, pushbookmark
+from mercurial.bookmarks import listbookmarks, pushbookmark
 from mercurial.util import sha1
 from mercurial import hg
 
@@ -282,8 +282,8 @@ class HGRemote(object):
         '''
         output(u"import")
         output(u"export")
-        output(u"refspec refs/heads/branches/*:%s/branches/*" % self.prefix)
-        output(u"refspec refs/heads/*:%s/bookmarks/*" % self.prefix)
+        output(u"refspec refs/heads/bookmarks/*:%s/bookmarks/*" % self.prefix)
+        output(u"refspec refs/heads/*:%s/branches/*" % self.prefix)
         output(u"refspec refs/tags/*:%s/tags/*" % self.prefix)
 
         if self.marks_git_path.exists():
@@ -299,19 +299,13 @@ class HGRemote(object):
         current_branch = self.repo.dirstate.branch()
 
         # Update the head reference
-        head = readcurrent(self.repo)
-        if head:
-            node = self.repo[head]
-        else:
-            # If there is no bookmark for head, mock one
-            head = current_branch
-            node = self.repo['.'] or self.repo['tip']
-            if not node:
-                output()
-                return
-            head = head if head != 'default' else 'master'
-            self.bookmarks[head] = node
-
+        # FIXME: self.repo['.'] gets the "HEAD" branch of the local clone which
+        # will always be default. See if we can get the branch the server is on.
+        head = current_branch
+        node = self.repo['.'] or self.repo['tip']
+        if not node:
+            output()
+            return
         self.headnode = (head, node)
 
         # Update the bookmark references
@@ -329,11 +323,11 @@ class HGRemote(object):
 
         # list the named branch references
         for branch in self.branches:
-            output("? refs/heads/branches/%s" % hg_to_git_spaces(branch))
+            output("? refs/heads/%s" % hg_to_git_spaces(branch))
 
         # list the bookmark references
         for bookmark in self.bookmarks:
-            output("? refs/heads/%s" % hg_to_git_spaces(bookmark))
+            output("? refs/heads/bookmarks/%s" % hg_to_git_spaces(bookmark))
 
         # list the tags
         for tag, node in self.repo.tagslist():
@@ -377,13 +371,13 @@ class HGImporter(object):
                     self.hgremote.headnode[0],
                     'bookmarks',
                     self.hgremote.headnode[1])
-            elif ref.startswith('refs/heads/branches/'):
-                self.do_branch(ref[len('refs/heads/branches/'):])
-            elif ref.startswith('refs/heads/'):
-                bookmark = ref[len('refs/heads/'):]
+            elif ref.startswith('refs/heads/bookmarks/'):
+                bookmark = ref[len('refs/heads/bookmarks/'):]
                 self.process_ref(bookmark,
                     'bookmarks',
                     self.hgremote.bookmarks[git_to_hg_spaces(bookmark)])
+            elif ref.startswith('refs/heads/'):
+                self.do_branch(ref[len('refs/heads/'):])
             elif ref.startswith('refs/tags/'):
                 tag = ref[len('refs/tags/'):]
                 self.process_ref(tag, 'tags', self.repo[git_to_hg_spaces(tag)])
@@ -528,16 +522,16 @@ class GitExporter(object):
             getattr(self, 'do_%s' % command)()
 
         for ref, node in self.parsed_refs.iteritems():
-            if ref.startswith('refs/heads/branches'):
-                branch = ref[len('refs/heads/branches'):]
-                if git_to_hg_spaces(branch) not in self.hgremote.branches:
-                    new_branch = True
-            elif ref.startswith('refs/heads/'):
-                bookmark = ref[len('refs/heads/'):]
+            if ref.startswith('refs/heads/bookmarks/'):
+                bookmark = ref[len('refs/heads/bookmarks/'):]
                 old = self.hgremote.bookmarks.get(bookmark)
                 old = old.hex() if old else ''
                 if not pushbookmark(self.repo, bookmark, old, node):
                     continue
+            elif ref.startswith('refs/heads/'):
+                branch = ref[len('refs/heads/'):]
+                if git_to_hg_spaces(branch) not in self.hgremote.branches:
+                    new_branch = True
             elif ref.startswith('refs/tags/'):
                 tag = ref[len('refs/tags/'):]
                 self.repo.tag([tag], node, None, True, None, {})
@@ -626,7 +620,7 @@ class GitExporter(object):
                         self.repo[parent_from].manifest():
                     files[file] = {'ctx': self.repo[parent_from][file]}
 
-        if ref.startswith('refs/heads/branches/'):
+        if ref.startswith('refs/heads/') and not ref.startswith('refs/heads/bookmarks/'):
             extra['branch'] = git_to_hg_spaces(ref.rpartition('/')[2])
 
         def get_filectx(repo, memctx, file):
