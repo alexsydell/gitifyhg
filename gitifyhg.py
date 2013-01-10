@@ -98,7 +98,7 @@ NAME = re.compile(r'^([^<>]+)')
 
 def sanitize_author(author):
     '''Mercurial allows a more freeform user string than git, so we have to
-    massage it to be compatible. Git experts "name <email>".'''
+    massage it to be compatible. Git expects "name <email>".'''
     name = "unknown"
     email = "unknown"
     author = author.replace('"', '')
@@ -213,7 +213,7 @@ class GitRemoteParser(object):
         '''Read and parse an author string. Return a tuple of
         (user string, date, git_tz).'''
         self.read_line()
-        AUTHOR_RE = re.compile('^\w+ (?:(.+)? ?<.*>) (\d+) ([+-]\d+)')
+        AUTHOR_RE = re.compile('^\w+ ((?:.+)? ?<.*>) (\d+) ([+-]\d+)')
         match = AUTHOR_RE.match(self.line)
         if not match:
             return None
