@@ -570,6 +570,7 @@ class GitExporter(object):
                 die('unhandled command: %s' % line)
             getattr(self, 'do_%s' % command)()
 
+        updated_refs = {}
         for ref, node in self.parsed_refs.iteritems():
             if ref.startswith('refs/heads/bookmarks/'):
                 bookmark = ref[len('refs/heads/bookmarks/'):]
@@ -577,16 +578,19 @@ class GitExporter(object):
                 old = old.hex() if old else ''
                 if not pushbookmark(self.repo, bookmark, old, node):
                     continue
+                updated_refs[ref] = node
             elif ref.startswith('refs/heads/'):
                 branch = ref[len('refs/heads/'):]
                 if git_to_hg_spaces(branch) not in self.hgremote.branches:
                     new_branch = True
+                updated_refs[ref] = node
             elif ref.startswith('refs/tags/'):
                 tag = ref[len('refs/tags/'):]
                 self.repo.tag([tag], node, None, True, None, {})
                 # FIXME: the new tag needs to be committed in such a way that
                 # the commit doesn't interfere with any other commits being
                 # exported.
+                updated_refs[ref] = node
             else:
                 # transport-helper/fast-export bugs
                 continue
@@ -598,6 +602,7 @@ class GitExporter(object):
             success = True
         except Abort as e:
             # mercurial.error.Abort: push creates new remote head f14531ca4e2d!
+            log("push error: %s" % e)
             if e.message.startswith("push creates new remote head"):
                 self.marks.load()  # restore from checkpoint
                 # strip revs backwards, newest to oldest
@@ -608,9 +613,15 @@ class GitExporter(object):
                 die("unknown hg exception: %s" % e)
         # TODO: handle network/other errors?
 
-        for ref in self.parsed_refs:
+        for ref, node in updated_refs.items():
             if success:
-                output("ok %s" % ref)
+                status = ""
+                if ref.startswith('refs/heads/'):
+                    branch = ref[len('refs/heads/'):]
+                    prev_tip = self.marks.tips.get("branches/%s" % branch)
+                    if prev_tip and prev_tip == self.repo[node].rev():
+                        status = " up to date"
+                output("ok %s%s" % (ref, status))
             else:
                 output("error %s non-fast forward" % ref)  # TODO: other errors as well
         output()
