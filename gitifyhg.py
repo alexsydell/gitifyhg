@@ -174,6 +174,33 @@ class HGMarks(object):
         return str(revision) in self.revisions_to_marks
 
 
+class GitMarks(object):
+    '''Maps integer marks to specific string mercurial revision identifiers.'''
+
+    def __init__(self, storage_path):
+        ''':param storage_path: The file that marks are stored in between calls.
+        Marks are stored in json format.'''
+        self.storage_path = storage_path
+        self.load()
+
+    def load(self):
+        '''Load the marks from the storage file'''
+        self.marks_to_sha1 = {}
+        if self.storage_path.exists():
+            with self.storage_path.open() as file:
+                for line in file:
+                    if not line.startswith(':'):
+                        die("invalid line in marks-git: " + line)
+                    mark, sha1 = line[1:].split()
+                    self.marks_to_sha1[mark] = sha1
+
+    def has_mark(self, mark):
+        return str(mark) in self.marks_to_sha1
+
+    def mark_to_sha1(self, mark):
+        return self.marks_to_sha1[str(mark)]
+
+
 class GitRemoteParser(object):
     '''Parser for stdin that processes the git-remote protocol.'''
 
@@ -246,6 +273,7 @@ class HGRemote(object):
         self.remotedir = gitdir.joinpath('hg', alias)
         self.marks_git_path = self.remotedir.joinpath('marks-git')
         self.marks = HGMarks(self.remotedir.joinpath('marks-hg'))
+        self.sha1s = GitMarks(self.marks_git_path)
         self.parsed_refs = {}
         self.blob_marks = {}
         self.branches = {}
@@ -332,7 +360,13 @@ class HGRemote(object):
 
         # list the named branch references
         for branch in self.branches:
-            output("? refs/heads/%s" % hg_to_git_spaces(branch))
+            rev = self.marks.tips.get("branches/%s" % branch)
+            prev_sha1 = "?"
+            if rev and self.marks.is_marked(rev):
+                mark = self.marks.revision_to_mark(rev)
+                if self.sha1s.has_mark(mark):
+                   prev_sha1 = self.sha1s.mark_to_sha1(mark)
+            output("%s refs/heads/%s" % (prev_sha1, hg_to_git_spaces(branch)))
 
         # list the bookmark references
         for bookmark in self.bookmarks:
