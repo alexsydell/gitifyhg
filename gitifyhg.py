@@ -359,8 +359,17 @@ class HGRemote(object):
         output("@refs/heads/%s HEAD" % self.headnode[0])
 
         # list the named branch references
-        for branch in self.branches:
-            rev = self.marks.tips.get("branches/%s" % branch)
+        for branch, heads in self.branches.items():
+            # TODO: merge this code with the other copy
+            if len(heads) > 1:
+                log("Branch '%s' has more than one head, consider merging" % branch, "WARNING")
+                if hasattr(self.repo, 'branchtip'):
+                    tip = self.repo.branchtip(branch)
+                else:
+                    tip = self.repo.branchtags()[branch]
+            else:
+                tip = heads[0]
+            rev = self.repo[tip].rev()
             prev_sha1 = "?"
             if rev and self.marks.is_marked(rev):
                 mark = self.marks.revision_to_mark(rev)
