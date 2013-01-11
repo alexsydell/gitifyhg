@@ -617,10 +617,12 @@ class GitExporter(object):
             if success:
                 status = ""
                 if ref.startswith('refs/heads/'):
-                    branch = ref[len('refs/heads/'):]
-                    prev_tip = self.marks.tips.get("branches/%s" % branch)
-                    if prev_tip and prev_tip == self.repo[node].rev():
+                    branch = "branches/%s" % ref[len('refs/heads/'):]
+                    prev_tip = self.marks.tips.get(branch)
+                    new_tip = self.repo[node].rev()
+                    if prev_tip and prev_tip == new_tip:
                         status = " up to date"
+                    self.marks.tips[branch] = new_tip
                 output("ok %s%s" % (ref, status))
             else:
                 output("error %s non-fast forward" % ref)  # TODO: other errors as well
