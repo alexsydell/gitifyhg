@@ -372,12 +372,12 @@ class HGRemote(object):
             else:
                 tip = heads[0]
             rev = self.repo[tip].rev()
-            prev_sha1 = "?"
+            repo_sha1 = "?"
             if rev and self.marks.is_marked(rev):
                 mark = self.marks.revision_to_mark(rev)
                 if self.sha1s.has_mark(mark):
-                   prev_sha1 = self.sha1s.mark_to_sha1(mark)
-            output("%s refs/heads/%s" % (prev_sha1, hg_to_git_spaces(branch)))
+                   repo_sha1 = self.sha1s.mark_to_sha1(mark)
+            output("%s refs/heads/%s" % (repo_sha1, hg_to_git_spaces(branch)))
 
         # list the bookmark references
         for bookmark in self.bookmarks:
@@ -386,7 +386,13 @@ class HGRemote(object):
         # list the tags
         for tag, node in self.repo.tagslist():
             if tag != "tip":
-                output("? refs/tags/%s" % hg_to_git_spaces(tag))
+                rev = self.repo[node].rev()
+                repo_sha1 = "?"
+                if rev and self.marks.is_marked(rev):
+                    mark = self.marks.revision_to_mark(rev)
+                    if self.sha1s.has_mark(mark):
+                       repo_sha1 = self.sha1s.mark_to_sha1(mark)
+                output("%s refs/tags/%s" % (repo_sha1, hg_to_git_spaces(tag)))
 
         output()
 
