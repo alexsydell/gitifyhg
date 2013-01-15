@@ -36,13 +36,13 @@ from mercurial import hg
 
 DEBUG_GITIFYHG = os.environ.get("DEBUG_GITIFYHG", "").lower() == "on"
 
-# hijack stdout to prevent mercurial from inadvertently talking to git.
-# interactive=off and ui.pushbuffer() don't seem to work.
-class DummyOut(object):
-    def write(self, x): pass
-    def flush(self): pass
+# hook up stdout to stderr so that mercurial can still print messages (useful
+# for things like auth prompts) but so it doesn't inadvertently talk to git
+# via stdout as part of the remote-helper protocol. interactive=off and
+# ui.pushbuffer() should in theory tell mercurial not to print messages, but
+# don't seem to fully work.
 actual_stdout = sys.stdout
-sys.stdout = DummyOut()
+sys.stdout = sys.stderr
 
 
 def log(msg, level="DEBUG"):
@@ -288,7 +288,9 @@ class HGRemote(object):
         '''Make the Mercurial repo object self.repo available. If the local
         clone does not exist, clone it, otherwise, ensure it is fetched.'''
         myui = ui()
-        myui.setconfig('ui', 'interactive', 'off')
+
+        # set interactive for auth prompts
+        myui.setconfig('ui', 'interactive', 'on')
 
         local_path = self.remotedir.joinpath('clone')
         if not local_path.exists():
