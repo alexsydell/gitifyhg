@@ -706,7 +706,7 @@ class GitExporter(object):
                 mark = int(mark_ref[1:])
                 filespec = {'mode': hgmode(mode), 'data': self.blob_marks[mark]}
             elif line.startswith('D'):
-                t, path = line.split()
+                t, path = line.split(' ', 1)
                 filespec = {'deleted': True}
             files[path] = filespec
 
